@@ -5,7 +5,12 @@ import Aura from "@primeuix/themes/aura";
 export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
   devtools: { enabled: true },
-  modules: ["@nuxt/eslint", "@nuxt/scripts", "@primevue/nuxt-module"],
+  modules: [
+    "@nuxt/eslint",
+    "@nuxt/scripts",
+    "@primevue/nuxt-module",
+    "@teages/nuxt-legacy",
+  ],
   css: ["./app/assets/css/main.css"],
   vite: {
     plugins: [tailwindcss()],
@@ -19,6 +24,19 @@ export default defineNuxtConfig({
       theme: {
         preset: Aura,
       },
+    },
+  },
+  postcss: {
+    plugins: {
+      "postcss-preset-env": {
+        stage: 3,
+        minimumVendorImplementations: 2,
+      },
+    },
+  },
+  legacy: {
+    vite: {
+      modernPolyfills: true,
     },
   },
 });
