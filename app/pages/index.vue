@@ -70,7 +70,7 @@ let ffmpeg: FFmpeg | null = null;
 onMounted(async () => {
   ffmpeg = new FFmpeg();
   await ffmpeg.load();
-  toast.add({ severity: "info", summary: "FFmpeg 加载完成" });
+  toast.add({ severity: "info", summary: "FFmpeg 加载完成", life: 3000 });
 });
 watch(videoUrl, (_, oldVal) => {
   if (oldVal) URL.revokeObjectURL(oldVal);

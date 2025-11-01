@@ -1,75 +1,10 @@
-# Nuxt Minimal Starter
+# Unidown
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+![Latest commit (branch)](https://img.shields.io/github/last-commit/share121/unidown/master)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/share121/unidown/blob/master/LICENSE)
 
-## Setup
+`Unidown` 网页版视频解析器
 
-Make sure to install dependencies:
+[进入官网](https://unidown.s121.top)
 
-```bash
-# npm
-npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
-```
-
-## Development Server
-
-Start the development server on `http://localhost:3000`:
-
-```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
-```
-
-## Production
-
-Build the application for production:
-
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+![界面](/image.png)
