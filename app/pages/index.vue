@@ -136,8 +136,7 @@ async function submitHandle(e: FormSubmitEvent) {
     if (isVideoInfo(res)) {
       title.value = res.title;
       const [videoBlobLocal, audioBlobLocal] = await Promise.all([
-        fetchWithProgress(res.videoUrl, res.headers, (p, l, t) => {
-          console.log("video progress", p, l, t);
+        fetchWithProgress(res.videoUrl, res.headers, (p) => {
           videoProgress.value = p;
         }).then((res) => {
           videoBlob.value = res;
