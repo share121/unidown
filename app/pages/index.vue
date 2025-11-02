@@ -13,42 +13,56 @@
         />
         <Button type="submit" :loading label="解析" />
       </Form>
-      <div class="mb-4 flex gap-2">
-        <Button
-          v-if="videoUrl"
-          as="a"
-          label="下载视频"
-          :href="videoUrl"
-          :download="`${title}.mp4`"
-        />
-        <Button
-          v-if="audioUrl"
-          as="a"
-          label="下载音频"
-          :href="audioUrl"
-          :download="`${title}.mp3`"
-        />
-        <Button
-          v-if="mergeUrl"
-          as="a"
-          label="合并下载"
-          :href="mergeUrl"
-          :download="`${title}.mp4`"
-        />
-      </div>
-      <h2 v-if="title" class="mb-2 text-xl">{{ title }}</h2>
-      <template v-if="mergeUrl">
-        <h3>合并版</h3>
-        <video class="w-full" :src="mergeUrl" controls />
-      </template>
-      <template v-if="videoUrl">
-        <h3>视频</h3>
-        <video class="w-full" :src="videoUrl" controls />
-      </template>
-      <template v-if="audioUrl">
-        <h3>音频</h3>
-        <audio class="w-full" :src="audioUrl" controls />
-      </template>
+      <Fieldset v-if="title" :legend="title">
+        <Panel header="合并版" class="mb-2" :collapsed="!mergeUrl">
+          <template #icons>
+            <Button
+              v-if="mergeUrl"
+              as="a"
+              :href="mergeUrl"
+              :download="`${title}.mp4`"
+              icon="pi pi-download"
+              severity="secondary"
+              rounded
+              text
+              size="small"
+            />
+          </template>
+          <video v-if="mergeUrl" class="w-full" :src="mergeUrl" controls />
+        </Panel>
+        <Panel header="视频" class="mb-2" :collapsed="!videoUrl">
+          <template #icons>
+            <Button
+              v-if="videoUrl"
+              as="a"
+              :href="videoUrl"
+              :download="`${title}.mp4`"
+              icon="pi pi-download"
+              severity="secondary"
+              rounded
+              text
+              size="small"
+            />
+          </template>
+          <video v-if="videoUrl" class="w-full" :src="videoUrl" controls />
+        </Panel>
+        <Panel header="音频" :collapsed="!audioUrl">
+          <template #icons>
+            <Button
+              v-if="audioUrl"
+              as="a"
+              :href="audioUrl"
+              :download="`${title}.mp3`"
+              icon="pi pi-download"
+              severity="secondary"
+              rounded
+              text
+              size="small"
+            />
+          </template>
+          <audio v-if="audioUrl" class="w-full" :src="audioUrl" controls />
+        </Panel>
+      </Fieldset>
     </div>
   </div>
 </template>

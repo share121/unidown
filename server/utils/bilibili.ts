@@ -8,8 +8,11 @@ export const extract: ExtractFn = async (input) => {
   const { cid, title } = await getInfo(bvid);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playinfo: any = await $fetch(
-    `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=80&fnval=4048&fourk=1&try_look=1`,
-    { headers: config.app.headers },
+    `https://api.bilibili.com/x/player/playurl?qn=80&fnval=4048&fourk=1&try_look=1`,
+    {
+      headers: config.headers,
+      query: { bvid, cid },
+    },
   );
   const videoUrl = playinfo.data.dash.video[0].baseUrl;
   const audioUrl = playinfo.data.dash.audio[0].baseUrl;
@@ -25,10 +28,10 @@ export const extract: ExtractFn = async (input) => {
 
 async function getInfo(bvid: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const resp: any = await $fetch(
-    `https://api.bilibili.com/x/player/pagelist?bvid=${bvid}`,
-    { headers: config.app.headers },
-  );
+  const resp: any = await $fetch(`https://api.bilibili.com/x/player/pagelist`, {
+    headers: config.headers,
+    query: { bvid },
+  });
   return {
     title: resp.data[0].part as string,
     cid: resp.data[0].cid as number,
