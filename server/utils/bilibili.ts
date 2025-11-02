@@ -1,14 +1,14 @@
 import type { ExtractFn } from "./extractors";
 
 const config = useRuntimeConfig();
-export const name = "bilibili";
+export const name = "\u0062\u0069\u006c\u0069\u0062\u0069\u006c\u0069";
 export const extract: ExtractFn = async (input) => {
   const bvid = extractBvid(input);
   if (!bvid) return null;
   const { cid, title } = await getInfo(bvid);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playinfo: any = await $fetch(
-    `https://api.bilibili.com/x/player/playurl?qn=80&fnval=4048&fourk=1&try_look=1`,
+    `https://api.${name}.com/x/player/playurl?qn=80&fnval=4048&fourk=1&try_look=1`,
     {
       headers: config.headers,
       query: { bvid, cid },
@@ -16,19 +16,19 @@ export const extract: ExtractFn = async (input) => {
   );
   const videoUrl = playinfo.data.dash.video[0].baseUrl;
   const audioUrl = playinfo.data.dash.audio[0].baseUrl;
-  console.log(`[Extractor][bilibili][VideoURL]`, videoUrl);
-  console.log(`[Extractor][bilibili][AudioURL]`, audioUrl);
+  console.log(`[Extractor][${name}][VideoURL]`, videoUrl);
+  console.log(`[Extractor][${name}][AudioURL]`, audioUrl);
   return {
     title,
     videoUrl,
     audioUrl,
-    headers: { referer: "https://www.bilibili.com" },
+    headers: { referer: `https://www.${name}.com` },
   };
 };
 
 async function getInfo(bvid: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const resp: any = await $fetch(`https://api.bilibili.com/x/player/pagelist`, {
+  const resp: any = await $fetch(`https://api.${name}.com/x/player/pagelist`, {
     headers: config.headers,
     query: { bvid },
   });

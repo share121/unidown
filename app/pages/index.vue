@@ -168,6 +168,17 @@ async function submitHandle(e: FormSubmitEvent) {
         closable: true,
       });
     }
+  } catch (e) {
+    console.error(e);
+    let message = "未知错误";
+    if (e instanceof Error) message = e.message;
+    if (typeof e === "string") message = e;
+    toast.add({
+      severity: "error",
+      summary: "解析失败",
+      detail: message,
+      closable: true,
+    });
   } finally {
     loading.value = false;
   }

@@ -17,6 +17,7 @@
     "@tailwindcss/vite": "^4.1.16",
     "@unhead/vue": "^2.0.3",
     "eslint": "^9.0.0",
+    "mdn-polyfills": "^5.20.0",
     "nuxt": "^4.2.0",
     "primeicons": "^7.0.0",
     "primevue": "^4.4.1",

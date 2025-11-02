@@ -30,13 +30,15 @@ export default defineNuxtConfig({
     plugins: {
       "postcss-preset-env": {
         stage: 3,
-        minimumVendorImplementations: 2,
+        autoprefixer: { grid: true },
       },
     },
   },
   legacy: {
     vite: {
-      modernPolyfills: true,
+      additionalLegacyPolyfills: [
+        "mdn-polyfills/Element.prototype.getAttributeNames",
+      ],
     },
   },
   runtimeConfig: {
