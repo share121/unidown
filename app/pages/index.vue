@@ -105,7 +105,7 @@ async function submitHandle(e: FormSubmitEvent) {
         life: 3000,
       });
       const [videoBlobLocal, audioBlobLocal] = await Promise.all([
-        $fetch<Blob>("/api/fetch", {
+        $fetch<Blob>("https://unidown-fetch.s121.top", {
           method: "POST",
           body: {
             url: res.videoUrl,
@@ -122,7 +122,7 @@ async function submitHandle(e: FormSubmitEvent) {
           return res;
         }),
         res.audioUrl
-          ? $fetch<Blob | undefined>("/api/fetch", {
+          ? $fetch<Blob | undefined>("https://unidown-fetch.s121.top", {
               method: "POST",
               body: {
                 url: res.audioUrl,
