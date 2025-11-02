@@ -14,22 +14,6 @@
         <Button type="submit" :loading label="解析" />
       </Form>
       <Fieldset v-if="title" :legend="title">
-        <Panel header="合并版" class="mb-2" :collapsed="!mergeUrl">
-          <template #icons>
-            <Button
-              v-if="mergeUrl"
-              as="a"
-              :href="mergeUrl"
-              :download="`${title}.mp4`"
-              icon="pi pi-download"
-              severity="secondary"
-              rounded
-              text
-              size="small"
-            />
-          </template>
-          <video v-if="mergeUrl" class="w-full" :src="mergeUrl" controls />
-        </Panel>
         <Panel header="视频" class="mb-2">
           <template #icons>
             <Button
@@ -44,15 +28,14 @@
               size="small"
             />
           </template>
-          <video v-if="videoUrl" class="w-full" :src="videoUrl" controls />
+          <video v-if="videoUrl" class="mb-2 w-full" :src="videoUrl" controls />
           <ProgressBar
-            v-else
             :value="videoProgress"
             :mode="videoProgress ? 'determinate' : 'indeterminate'"
             >{{ videoProgress.toFixed(2) }}%</ProgressBar
           >
         </Panel>
-        <Panel header="音频">
+        <Panel header="音频" class="mb-2">
           <template #icons>
             <Button
               v-if="audioUrl"
@@ -66,13 +49,31 @@
               size="small"
             />
           </template>
-          <audio v-if="audioUrl" class="w-full" :src="audioUrl" controls />
+          <audio v-if="audioUrl" class="mb-2 w-full" :src="audioUrl" controls />
           <ProgressBar
-            v-else
             :value="audioProgress"
             :mode="audioProgress ? 'determinate' : 'indeterminate'"
             >{{ audioProgress.toFixed(2) }}%</ProgressBar
           >
+        </Panel>
+        <Panel
+          header="合并版 (视频、音频都下载完成后才能合并)"
+          :collapsed="!mergeUrl"
+        >
+          <template #icons>
+            <Button
+              v-if="mergeUrl"
+              as="a"
+              :href="mergeUrl"
+              :download="`${title}.mp4`"
+              icon="pi pi-download"
+              severity="secondary"
+              rounded
+              text
+              size="small"
+            />
+          </template>
+          <video v-if="mergeUrl" class="w-full" :src="mergeUrl" controls />
         </Panel>
       </Fieldset>
     </div>
@@ -89,8 +90,6 @@ const title = ref("");
 const videoUrl = ref("");
 const audioUrl = ref("");
 const mergeUrl = ref("");
-const videoBlob = ref<Blob>();
-const audioBlob = ref<Blob>();
 const videoProgress = ref(0);
 const audioProgress = ref(0);
 let ffmpeg: FFmpeg | null = null;
@@ -100,18 +99,10 @@ onMounted(async () => {
   await ffmpeg.load();
   toast.add({ severity: "info", summary: "FFmpeg 加载完成", life: 3000 });
 });
-watch(videoUrl, (_, oldVal) => {
-  if (oldVal) URL.revokeObjectURL(oldVal);
-});
-watch(audioUrl, (_, oldVal) => {
-  if (oldVal) URL.revokeObjectURL(oldVal);
-});
 watch(mergeUrl, (_, oldVal) => {
   if (oldVal) URL.revokeObjectURL(oldVal);
 });
 onBeforeUnmount(() => {
-  if (videoUrl.value) URL.revokeObjectURL(videoUrl.value);
-  if (audioUrl.value) URL.revokeObjectURL(audioUrl.value);
   if (mergeUrl.value) URL.revokeObjectURL(mergeUrl.value);
 });
 
@@ -122,8 +113,6 @@ async function submitHandle(e: FormSubmitEvent) {
   videoUrl.value = "";
   audioUrl.value = "";
   mergeUrl.value = "";
-  videoBlob.value = undefined;
-  audioBlob.value = undefined;
   videoProgress.value = 0;
   audioProgress.value = 0;
   try {
@@ -135,29 +124,19 @@ async function submitHandle(e: FormSubmitEvent) {
     console.log(res);
     if (isVideoInfo(res)) {
       title.value = res.title;
-      const [videoBlobLocal, audioBlobLocal] = await Promise.all([
-        fetchWithProgress(res.videoUrl, res.headers, (p) => {
-          videoProgress.value = p;
-        }).then((res) => {
-          videoBlob.value = res;
-          videoUrl.value = URL.createObjectURL(res);
-          return res;
-        }),
-        res.audioUrl
-          ? fetchWithProgress(res.audioUrl, res.headers, (p) => {
-              audioProgress.value = p;
-            }).then((res) => {
-              audioBlob.value = res;
-              audioUrl.value = res ? URL.createObjectURL(res) : "";
-              return res;
-            })
-          : undefined,
-      ]);
-      if (audioBlobLocal) {
-        const mergeMedia = await mergeVideo(videoBlobLocal, audioBlobLocal);
+      videoUrl.value = proxyUrl(res.videoUrl, res.headers);
+      if (res.audioUrl) {
+        audioUrl.value = proxyUrl(res.audioUrl, res.headers);
+        const [videoBlob, audioBlob] = await Promise.all([
+          fetchWithProgress(res.videoUrl, res.headers, (p) => {
+            videoProgress.value = p;
+          }),
+          fetchWithProgress(res.audioUrl, res.headers, (p) => {
+            audioProgress.value = p;
+          }),
+        ]);
+        const mergeMedia = await mergeVideo(videoBlob, audioBlob);
         mergeUrl.value = URL.createObjectURL(mergeMedia);
-      } else {
-        mergeUrl.value = "";
       }
     } else {
       toast.add({
@@ -252,5 +231,14 @@ async function fetchWithProgress(
   }
   const blob = new Blob(chunks);
   return blob;
+}
+
+function proxyUrl(url: string, headers: Record<string, string> = {}): string {
+  const newUrl = new URL("/api/get", location.href);
+  newUrl.searchParams.set("url", url);
+  for (const [key, value] of Object.entries(headers)) {
+    newUrl.searchParams.set(key, value);
+  }
+  return newUrl.toString();
 }
 </script>
