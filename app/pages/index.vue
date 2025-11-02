@@ -99,11 +99,16 @@ onMounted(async () => {
   await ffmpeg.load();
   toast.add({ severity: "info", summary: "FFmpeg 加载完成", life: 3000 });
 });
-watch(mergeUrl, (_, oldVal) => {
-  if (oldVal) URL.revokeObjectURL(oldVal);
-});
+const releaseBlobUrl = (_: string, oldVal: string) => {
+  if (oldVal.startsWith("blob:")) URL.revokeObjectURL(oldVal);
+};
+watch(videoUrl, releaseBlobUrl);
+watch(audioUrl, releaseBlobUrl);
+watch(mergeUrl, releaseBlobUrl);
 onBeforeUnmount(() => {
-  if (mergeUrl.value) URL.revokeObjectURL(mergeUrl.value);
+  if (videoUrl.value.startsWith("blob:")) URL.revokeObjectURL(videoUrl.value);
+  if (audioUrl.value.startsWith("blob:")) URL.revokeObjectURL(audioUrl.value);
+  if (mergeUrl.value.startsWith("blob:")) URL.revokeObjectURL(mergeUrl.value);
 });
 
 async function submitHandle(e: FormSubmitEvent) {
@@ -130,9 +135,15 @@ async function submitHandle(e: FormSubmitEvent) {
         const [videoBlob, audioBlob] = await Promise.all([
           fetchWithProgress(res.videoUrl, res.headers, (p) => {
             videoProgress.value = p;
+          }).then((res) => {
+            videoUrl.value = URL.createObjectURL(res);
+            return res;
           }),
           fetchWithProgress(res.audioUrl, res.headers, (p) => {
             audioProgress.value = p;
+          }).then((res) => {
+            audioUrl.value = URL.createObjectURL(res);
+            return res;
           }),
         ]);
         const mergeMedia = await mergeVideo(videoBlob, audioBlob);
