@@ -203,7 +203,7 @@ async function fetchWithProgress(
     total: number,
   ) => void = () => {},
 ): Promise<Blob> {
-  const response = await fetch("https://unidown-fetch.s121.top", {
+  const response = await fetch("/api/fetch", {
     method: "POST",
     body: JSON.stringify({
       url,
