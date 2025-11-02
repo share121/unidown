@@ -10,7 +10,11 @@ export const extract: ExtractFn = async (input) => {
   const playinfo: any = await $fetch(
     `https://api.${name}.com/x/player/playurl?qn=80&fnval=4048&fourk=1&try_look=1`,
     {
-      headers: config.headers,
+      headers: {
+        ...config.headers,
+        Origin: "https://www.bilibili.com",
+        Referrer: `https://www.bilibili.com/video/${bvid}`,
+      },
       query: { bvid, cid },
     },
   );
@@ -29,7 +33,11 @@ export const extract: ExtractFn = async (input) => {
 async function getInfo(bvid: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const resp: any = await $fetch(`https://api.${name}.com/x/player/pagelist`, {
-    headers: config.headers,
+    headers: {
+      ...config.headers,
+      Origin: "https://www.bilibili.com",
+      Referrer: `https://www.bilibili.com/video/${bvid}`,
+    },
     query: { bvid },
   });
   return {
