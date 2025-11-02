@@ -8,6 +8,9 @@ export const extract: ExtractFn = async (input) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playinfo: any = await $fetch(
     `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&qn=80&fnval=4048&fourk=1&try_look=1`,
+    {
+      cache: "no-cache",
+    },
   );
   const videoUrl = playinfo.data.dash.video[0].baseUrl;
   const audioUrl = playinfo.data.dash.audio[0].baseUrl;
@@ -25,6 +28,9 @@ async function getInfo(bvid: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const resp: any = await $fetch(
     `https://api.bilibili.com/x/player/pagelist?bvid=${bvid}`,
+    {
+      cache: "no-cache",
+    },
   );
   return {
     title: resp.data[0].part as string,
