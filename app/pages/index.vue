@@ -1,5 +1,5 @@
 <template>
-  <div class="grid h-screen place-items-center">
+  <div class="grid min-h-screen place-items-center">
     <div class="w-full max-w-3xl p-2">
       <h1 class="my-8 text-center text-5xl font-bold">Unidown</h1>
       <Form class="mb-4 flex gap-2" @submit="submitHandle">
@@ -30,7 +30,7 @@
           </template>
           <video v-if="mergeUrl" class="w-full" :src="mergeUrl" controls />
         </Panel>
-        <Panel header="视频" class="mb-2" :collapsed="!videoUrl">
+        <Panel header="视频" class="mb-2">
           <template #icons>
             <Button
               v-if="videoUrl"
@@ -45,8 +45,14 @@
             />
           </template>
           <video v-if="videoUrl" class="w-full" :src="videoUrl" controls />
+          <ProgressBar
+            v-else
+            :value="videoProgress"
+            :mode="videoProgress ? 'determinate' : 'indeterminate'"
+            >{{ videoProgress.toFixed(2) }}%</ProgressBar
+          >
         </Panel>
-        <Panel header="音频" :collapsed="!audioUrl">
+        <Panel header="音频">
           <template #icons>
             <Button
               v-if="audioUrl"
@@ -61,6 +67,12 @@
             />
           </template>
           <audio v-if="audioUrl" class="w-full" :src="audioUrl" controls />
+          <ProgressBar
+            v-else
+            :value="audioProgress"
+            :mode="audioProgress ? 'determinate' : 'indeterminate'"
+            >{{ audioProgress.toFixed(2) }}%</ProgressBar
+          >
         </Panel>
       </Fieldset>
     </div>
@@ -76,9 +88,11 @@ const toast = useToast();
 const title = ref("");
 const videoUrl = ref("");
 const audioUrl = ref("");
+const mergeUrl = ref("");
 const videoBlob = ref<Blob>();
 const audioBlob = ref<Blob>();
-const mergeUrl = ref("");
+const videoProgress = ref(0);
+const audioProgress = ref(0);
 let ffmpeg: FFmpeg | null = null;
 
 onMounted(async () => {
@@ -104,6 +118,14 @@ onBeforeUnmount(() => {
 async function submitHandle(e: FormSubmitEvent) {
   if (!e.valid) return;
   loading.value = true;
+  title.value = "";
+  videoUrl.value = "";
+  audioUrl.value = "";
+  mergeUrl.value = "";
+  videoBlob.value = undefined;
+  audioBlob.value = undefined;
+  videoProgress.value = 0;
+  audioProgress.value = 0;
   try {
     const input = e.values.input as string;
     const res = await $fetch("/api/extract", {
@@ -113,43 +135,21 @@ async function submitHandle(e: FormSubmitEvent) {
     console.log(res);
     if (isVideoInfo(res)) {
       title.value = res.title;
-      toast.add({
-        severity: "success",
-        summary: "解析成功，开始下载",
-        life: 3000,
-      });
       const [videoBlobLocal, audioBlobLocal] = await Promise.all([
-        $fetch<Blob>("https://unidown-fetch.s121.top", {
-          method: "POST",
-          body: {
-            url: res.videoUrl,
-            headers: res.headers,
-          },
+        fetchWithProgress(res.videoUrl, res.headers, (p, l, t) => {
+          console.log("video progress", p, l, t);
+          videoProgress.value = p;
         }).then((res) => {
           videoBlob.value = res;
           videoUrl.value = URL.createObjectURL(res);
-          toast.add({
-            severity: "success",
-            summary: "视频下载成功",
-            life: 3000,
-          });
           return res;
         }),
         res.audioUrl
-          ? $fetch<Blob | undefined>("https://unidown-fetch.s121.top", {
-              method: "POST",
-              body: {
-                url: res.audioUrl,
-                headers: res.headers,
-              },
+          ? fetchWithProgress(res.audioUrl, res.headers, (p) => {
+              audioProgress.value = p;
             }).then((res) => {
               audioBlob.value = res;
               audioUrl.value = res ? URL.createObjectURL(res) : "";
-              toast.add({
-                severity: "success",
-                summary: "音频下载成功",
-                life: 3000,
-              });
               return res;
             })
           : undefined,
@@ -203,5 +203,44 @@ async function mergeVideo(videoBlob: Blob, audioBlob: Blob): Promise<Blob> {
   await ffmpeg.deleteFile("input.mp3");
   await ffmpeg.deleteFile("output.mp4");
   return outputBlob;
+}
+
+async function fetchWithProgress(
+  url: string,
+  headers: Record<string, string> = {},
+  onProgress: (
+    progress: number,
+    loaded: number,
+    total: number,
+  ) => void = () => {},
+): Promise<Blob> {
+  const response = await fetch("https://unidown-fetch.s121.top", {
+    method: "POST",
+    body: JSON.stringify({
+      url,
+      headers,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  const contentLength = response.headers.get("content-length");
+  const total = contentLength ? parseInt(contentLength, 10) : 0;
+  let loaded = 0;
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("无法读取响应流");
+  const chunks: ArrayBuffer[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      chunks.push(value.buffer);
+      loaded += value.length;
+      const progress = total > 0 ? (loaded / total) * 100 : 0;
+      onProgress(progress, loaded, total);
+    }
+  }
+  const blob = new Blob(chunks);
+  return blob;
 }
 </script>

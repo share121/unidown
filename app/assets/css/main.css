@@ -1,2 +1,6 @@
 @import "tailwindcss";
 @import "primeicons/primeicons.css";
+
+.p-progressbar-value {
+  transition: none !important;
+}
