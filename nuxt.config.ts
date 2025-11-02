@@ -36,6 +36,8 @@ export default defineNuxtConfig({
   },
   legacy: {
     vite: {
+      targets: ["fully supports proxy"],
+      modernPolyfills: true,
       additionalLegacyPolyfills: [
         "mdn-polyfills/Element.prototype.getAttributeNames",
       ],
