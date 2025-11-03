@@ -15,7 +15,7 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      exclude: ["@ffmpeg/ffmpeg"],
+      // exclude: ["@ffmpeg/ffmpeg"],
     },
   },
   primevue: {
@@ -38,6 +38,7 @@ export default defineNuxtConfig({
     vite: {
       targets: ["fully supports proxy"],
       modernPolyfills: true,
+      renderModernChunks: false,
       additionalLegacyPolyfills: [
         "mdn-polyfills/Element.prototype.getAttributeNames",
       ],
