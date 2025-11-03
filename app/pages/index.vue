@@ -82,7 +82,7 @@
 
 <script setup lang="ts">
 import type { FormSubmitEvent } from "@primevue/forms";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
+import type { FFmpeg } from "@ffmpeg/ffmpeg";
 
 const loading = ref(false);
 const toast = useToast();
@@ -92,11 +92,22 @@ const audioUrl = ref("");
 const mergeUrl = ref("");
 const videoProgress = ref(0);
 const audioProgress = ref(0);
-let ffmpeg: FFmpeg | null = null;
+
+const getFFmpeg = (() => {
+  let ffmpeg: Promise<FFmpeg> | null = null;
+  return () => {
+    if (ffmpeg) return ffmpeg;
+    ffmpeg = import("@ffmpeg/ffmpeg").then(async ({ FFmpeg }) => {
+      const ffmpeg = new FFmpeg();
+      await ffmpeg.load();
+      return ffmpeg;
+    });
+    return ffmpeg;
+  };
+})();
 
 onMounted(async () => {
-  ffmpeg = new FFmpeg();
-  await ffmpeg.load();
+  await getFFmpeg();
   toast.add({ severity: "info", summary: "FFmpeg 加载完成", life: 3000 });
 });
 const releaseBlobUrl = (_: string, oldVal: string) => {
@@ -179,8 +190,7 @@ function isVideoInfo(obj: any): obj is VideoInfo {
 }
 
 async function mergeVideo(videoBlob: Blob, audioBlob: Blob): Promise<Blob> {
-  if (!ffmpeg) ffmpeg = new FFmpeg();
-  await ffmpeg.load();
+  const ffmpeg = await getFFmpeg();
   const [videoData, audioData] = await Promise.all([
     videoBlob.arrayBuffer(),
     audioBlob.arrayBuffer(),

@@ -14,9 +14,6 @@ export default defineNuxtConfig({
   css: ["./app/assets/css/main.css"],
   vite: {
     plugins: [tailwindcss()],
-    optimizeDeps: {
-      // exclude: ["@ffmpeg/ffmpeg"],
-    },
   },
   primevue: {
     options: {
