@@ -20,14 +20,18 @@ export default defineNuxtConfig({
       ripple: true,
       theme: {
         preset: Aura,
+        options: {
+          prefix: "p",
+          darkModeSelector: "system",
+          cssLayer: false,
+        },
       },
     },
   },
   postcss: {
     plugins: {
       "postcss-preset-env": {
-        stage: 3,
-        autoprefixer: { grid: true },
+        stage: 0,
       },
     },
   },
