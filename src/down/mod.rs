@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use std::{any::Any, fmt::Debug, path::Path, sync::Arc};
 
+mod alldown;
 pub mod bilibili;
-mod udown;
-pub use udown::*;
+pub use alldown::*;
 
 pub trait Context: Any + Send + Sync + Debug {}
 impl<T: Any + Send + Sync + Debug> Context for T {}
@@ -39,7 +39,7 @@ pub struct AssetVariant {
 }
 
 #[async_trait]
-pub trait Downloader: Send + Sync {
+pub trait Down: Send + Sync {
     fn name(&self) -> &'static str;
     async fn parse(&self, data: &str) -> color_eyre::Result<Vec<ResourceNode>>;
     async fn download(&self, nodes: &[ResourceNode], ouput: &Path) -> color_eyre::Result<()>;

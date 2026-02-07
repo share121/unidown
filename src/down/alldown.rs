@@ -1,30 +1,30 @@
-use crate::{Downloader, ResourceNode};
+use crate::{Down, ResourceNode};
 use async_trait::async_trait;
 use std::{collections::HashMap, path::Path, sync::Arc};
 use tokio::task::JoinSet;
 use tracing::{error, instrument};
 
-pub struct UDownloader {
-    pub downloaders: HashMap<&'static str, Arc<dyn Downloader>>,
+pub struct AllDown {
+    pub downs: HashMap<&'static str, Arc<dyn Down>>,
 }
 
-impl UDownloader {
-    pub fn new(downloaders: &[Arc<dyn Downloader>]) -> Self {
+impl AllDown {
+    pub fn new(downs: &[Arc<dyn Down>]) -> Self {
         let mut res = HashMap::new();
-        for downloader in downloaders {
-            res.insert(downloader.name(), downloader.clone());
+        for down in downs {
+            res.insert(down.name(), down.clone());
         }
-        Self { downloaders: res }
+        Self { downs: res }
     }
 }
 
 #[derive(Debug)]
-struct UContext {
+struct AllCtx {
     name: &'static str,
 }
 
 #[async_trait]
-impl Downloader for UDownloader {
+impl Down for AllDown {
     fn name(&self) -> &'static str {
         "unidown"
     }
@@ -34,10 +34,10 @@ impl Downloader for UDownloader {
         let mut parsed = Vec::new();
         let mut task_set = JoinSet::new();
         let url: Arc<str> = url.into();
-        for (&name, downloader) in &self.downloaders {
-            let downloader = downloader.clone();
+        for (&name, down) in &self.downs {
+            let down = down.clone();
             let url = url.clone();
-            task_set.spawn(async move { (name, downloader.parse(&url).await) });
+            task_set.spawn(async move { (name, down.parse(&url).await) });
         }
         while let Some(result) = task_set.join_next().await {
             let Ok((name, result)) = result else { continue };
@@ -48,7 +48,7 @@ impl Downloader for UDownloader {
                 tags: vec![],
                 asset_groups: vec![],
                 children,
-                context: Arc::new(UContext { name }),
+                context: Arc::new(AllCtx { name }),
             });
         }
         Ok(parsed)
@@ -59,15 +59,15 @@ impl Downloader for UDownloader {
         let mut task_set = JoinSet::new();
         let output: Arc<Path> = output.into();
         for node in nodes {
-            let Some(ctx) = node.get_context::<UContext>() else {
+            let Some(ctx) = node.get_context::<AllCtx>() else {
                 continue;
             };
-            let Some(downloader) = self.downloaders.get(ctx.name).cloned() else {
+            let Some(down) = self.downs.get(ctx.name).cloned() else {
                 continue;
             };
             let output = output.clone();
             let children = node.children.clone();
-            task_set.spawn(async move { downloader.download(&children, &output).await });
+            task_set.spawn(async move { down.download(&children, &output).await });
         }
         while let Some(result) = task_set.join_next().await {
             if let Err(e) = result {

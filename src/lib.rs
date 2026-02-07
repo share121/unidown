@@ -1,7 +1,7 @@
-mod downloader;
+mod down;
 mod utils;
 mod view;
 
-pub use downloader::*;
+pub use down::*;
 pub use utils::*;
 pub use view::*;

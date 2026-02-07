@@ -3,7 +3,7 @@ use tokio::fs;
 use tracing::level_filters::LevelFilter;
 use tracing_forest::ForestLayer;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
-use udown::{Downloader, UDownloader, bilibili::BilibiliDownloader};
+use unidown::{AllDown, Down, bilibili::BiliDown};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -20,14 +20,15 @@ async fn main() -> color_eyre::Result<()> {
         .with(ForestLayer::default())
         .init();
 
+    let downs: &[Arc<dyn Down>] = &[Arc::new(BiliDown::new()?)];
+    let alldown = AllDown::new(downs);
+
     let url = "https://www.bilibili.com/video/BV1NSrpBCEDm";
     let path = Path::new(".");
     let _ = fs::create_dir_all(&path).await;
 
-    let downloaders: &[Arc<dyn Downloader>] = &[Arc::new(BilibiliDownloader::new()?)];
-    let udownloader = UDownloader::new(downloaders);
-    let res = udownloader.parse(url).await?;
-    udownloader.download(&res, path).await?;
+    let res = alldown.parse(url).await?;
+    alldown.download(&res, path).await?;
 
     Ok(())
 }

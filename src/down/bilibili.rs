@@ -1,4 +1,4 @@
-use crate::{AssetGroup, AssetVariant, Downloader, ResourceNode, fd::fd, ffmpeg::ffmpeg};
+use crate::{AssetGroup, AssetVariant, Down, ResourceNode, fd::fd, ffmpeg::ffmpeg};
 use async_trait::async_trait;
 use color_eyre::eyre::{Context, ContextCompat, bail, eyre};
 use fast_down::utils::gen_unique_path;
@@ -36,18 +36,18 @@ lazy_static! {
 }
 
 #[derive(Debug)]
-pub struct BilibiliDownloader {
+pub struct BiliDown {
     client: Client,
 }
 
 #[derive(Debug)]
-struct BilibiliContext {
+struct BiliCtx {
     title: String,
     video_url: Url,
     audio_url: Url,
 }
 
-impl BilibiliDownloader {
+impl BiliDown {
     pub fn new() -> color_eyre::Result<Self> {
         let client = ClientBuilder::new()
             .default_headers(DEFAULT_HEADERS.as_ref().clone())
@@ -57,7 +57,7 @@ impl BilibiliDownloader {
 }
 
 #[async_trait]
-impl Downloader for BilibiliDownloader {
+impl Down for BiliDown {
     fn name(&self) -> &'static str {
         "bilibili"
     }
@@ -92,7 +92,7 @@ impl Downloader for BilibiliDownloader {
                 ],
             }],
             children: vec![],
-            context: Arc::new(BilibiliContext {
+            context: Arc::new(BiliCtx {
                 title,
                 video_url,
                 audio_url,
@@ -103,7 +103,7 @@ impl Downloader for BilibiliDownloader {
     #[instrument(name = "bilibili 下载器", skip(self, nodes))]
     async fn download(&self, nodes: &[ResourceNode], output: &Path) -> color_eyre::Result<()> {
         for node in nodes {
-            let Some(ctx) = node.get_context::<BilibiliContext>() else {
+            let Some(ctx) = node.get_context::<BiliCtx>() else {
                 continue;
             };
             let features: Vec<_> = node.asset_groups[0]
