@@ -1,16 +1,18 @@
-use std::{path::Path, sync::Arc};
-use tokio::fs;
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use color_eyre::eyre::eyre;
+use gpui::{AppContext, Application};
+use gpui_component::Root;
 use tracing::level_filters::LevelFilter;
+use tracing_error::ErrorLayer;
 use tracing_forest::ForestLayer;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
-use unidown::{AllDown, Down, bilibili::BiliDown};
+use unidown::{home::HomeView, window_options::window_options};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-#[tokio::main]
-async fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
+fn main() -> color_eyre::Result<()> {
     Registry::default()
         .with(
             EnvFilter::builder()
@@ -18,17 +20,23 @@ async fn main() -> color_eyre::Result<()> {
                 .from_env_lossy(),
         )
         .with(ForestLayer::default())
+        .with(ErrorLayer::default())
         .init();
+    color_eyre::install()?;
 
-    let downs: &[Arc<dyn Down>] = &[Arc::new(BiliDown::new()?)];
-    let alldown = AllDown::new(downs);
-
-    let url = "https://www.bilibili.com/video/BV1NSrpBCEDm";
-    let path = Path::new(".");
-    let _ = fs::create_dir_all(&path).await;
-
-    let res = alldown.parse(url).await?;
-    alldown.download(&res, path).await?;
-
+    let app = Application::new().with_assets(gpui_component_assets::Assets);
+    app.run(move |cx| {
+        gpui_component::init(cx);
+        let options = window_options("Unidown 下载器".into(), 800., 600., cx);
+        cx.spawn(async move |cx| {
+            cx.open_window(options, |window, cx| {
+                let view = cx.new(|cx| HomeView::new(window, cx));
+                cx.new(|cx| Root::new(view, window, cx))
+            })
+            .map_err(|e| eyre!(e))?;
+            Ok::<_, color_eyre::Report>(())
+        })
+        .detach();
+    });
     Ok(())
 }

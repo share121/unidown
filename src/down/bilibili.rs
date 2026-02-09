@@ -2,6 +2,7 @@ use crate::{AssetGroup, AssetVariant, Down, ResourceNode, fd::fd, ffmpeg::ffmpeg
 use async_trait::async_trait;
 use color_eyre::eyre::{Context, ContextCompat, bail, eyre};
 use fast_down::utils::gen_unique_path;
+use gpui::SharedString;
 use lazy_static::lazy_static;
 use regex::Regex;
 use reqwest::{
@@ -42,7 +43,7 @@ pub struct BiliDown {
 
 #[derive(Debug)]
 struct BiliCtx {
-    title: String,
+    title: SharedString,
     video_url: Url,
     audio_url: Url,
 }
@@ -67,26 +68,25 @@ impl Down for BiliDown {
         let bvid = extract_bvid(input).wrap_err("无法提取 bilibili 视频的 bvid")?;
         let (title, (video_url, audio_url)) =
             tokio::try_join!(get_title(bvid, &self.client), get_info(bvid, &self.client))?;
+        let title = SharedString::new(title);
         Ok(vec![ResourceNode {
             title: title.clone(),
-            selected: true,
-            tags: vec![],
             asset_groups: vec![AssetGroup {
-                title: "下载内容".to_string(),
+                title: "下载内容".into(),
                 variants: vec![
                     AssetVariant {
                         id: VIDEO_ID,
-                        label: "视频".to_string(),
+                        label: "视频".into(),
                         selected: false,
                     },
                     AssetVariant {
                         id: AUDIO_ID,
-                        label: "音频".to_string(),
+                        label: "音频".into(),
                         selected: false,
                     },
                     AssetVariant {
                         id: BOTH_ID,
-                        label: "视频+音频合并".to_string(),
+                        label: "视频+音频合并".into(),
                         selected: true,
                     },
                 ],

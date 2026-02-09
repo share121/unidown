@@ -29,11 +29,11 @@ impl Down for AllDown {
         "unidown"
     }
 
-    #[instrument(name = "unidown 解析器", skip(self))]
-    async fn parse(&self, url: &str) -> color_eyre::Result<Vec<ResourceNode>> {
+    #[instrument(name = "unidown 解析器", skip(self), err)]
+    async fn parse(&self, input: &str) -> color_eyre::Result<Vec<ResourceNode>> {
         let mut parsed = Vec::new();
         let mut task_set = JoinSet::new();
-        let url: Arc<str> = url.into();
+        let url: Arc<str> = input.into();
         for (&name, down) in &self.downs {
             let down = down.clone();
             let url = url.clone();
@@ -43,9 +43,7 @@ impl Down for AllDown {
             let Ok((name, result)) = result else { continue };
             let Ok(children) = result else { continue };
             parsed.push(ResourceNode {
-                title: name.to_string(),
-                selected: false,
-                tags: vec![],
+                title: name.into(),
                 asset_groups: vec![],
                 children,
                 context: Arc::new(AllCtx { name }),
@@ -54,7 +52,8 @@ impl Down for AllDown {
         Ok(parsed)
     }
 
-    #[instrument(name = "unidown 下载器", skip(self, nodes))]
+    #[instrument(name = "unidown 下载器", skip(self, nodes), err)]
+    /// 一定会返回 Ok(())
     async fn download(&self, nodes: &[ResourceNode], output: &Path) -> color_eyre::Result<()> {
         let mut task_set = JoinSet::new();
         let output: Arc<Path> = output.into();
