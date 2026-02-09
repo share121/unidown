@@ -1,9 +1,9 @@
 use crate::{ALL_DOWN, AssetGroup, Down, ResourceNode, TOKIO_RT, hash::hash};
 use color_eyre::eyre::{bail, eyre};
 use gpui::{
-    AnyElement, AppContext, ClickEvent, Context, Div, ElementId, Entity, InteractiveElement,
-    IntoElement, ParentElement, PathPromptOptions, Render, SharedString, Styled, Subscription,
-    Window, div, prelude::FluentBuilder,
+    AppContext, ClickEvent, Context, Div, ElementId, Entity, InteractiveElement, IntoElement,
+    ParentElement, PathPromptOptions, Render, SharedString, Styled, Subscription, Window, div,
+    prelude::FluentBuilder,
 };
 use gpui_component::{
     IconName, Sizable, StyledExt, TitleBar,
@@ -32,7 +32,7 @@ impl HomeView {
             move |view, _, ev, _, cx| {
                 if let InputEvent::PressEnter { secondary: _ } = ev {
                     let value = input_state.read(cx).value();
-                    let _ = view.parse(cx, value);
+                    let _ = view.parse(value, cx);
                 }
             }
         });
@@ -45,10 +45,10 @@ impl HomeView {
     }
     pub fn handle_click(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
         let value = self.input_state.read(cx).value();
-        let _ = self.parse(cx, value);
+        let _ = self.parse(value, cx);
     }
     #[instrument(err, skip(self, cx), fields(value = %value))]
-    pub fn parse(&mut self, cx: &mut Context<Self>, value: SharedString) -> color_eyre::Result<()> {
+    pub fn parse(&mut self, value: SharedString, cx: &mut Context<Self>) -> color_eyre::Result<()> {
         if self.is_loading {
             bail!("正在解析中")
         }
@@ -115,9 +115,9 @@ impl HomeView {
 impl Render for HomeView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.parsed.is_empty() {
-            self.render_home(cx).into_any_element()
+            self.render_home(cx)
         } else {
-            self.render_parsed(cx).into_any_element()
+            self.render_parsed(cx)
         }
     }
 }
@@ -135,7 +135,7 @@ impl HomeView {
         )
     }
 
-    fn render_home(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_home(&mut self, cx: &mut Context<Self>) -> Div {
         Self::title().child(
             v_flex()
                 .id("window-body")
@@ -170,7 +170,7 @@ impl HomeView {
         )
     }
 
-    fn render_parsed(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_parsed(&mut self, cx: &mut Context<Self>) -> Div {
         Self::title().child(
             v_flex()
                 .id("window-body")
@@ -218,7 +218,7 @@ impl HomeView {
         nodes: &[ResourceNode],
         mut path: Vec<usize>,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> Accordion {
         let mut root = Accordion::new(ElementId::NamedInteger("nodes".into(), hash(&path)))
             .multiple(true)
             .disabled(true);
@@ -236,11 +236,7 @@ impl HomeView {
     }
 
     /// 提取节点主体内容渲染：负责区分渲染 资源组 或 子节点
-    fn render_node_content(
-        node: &ResourceNode,
-        path: Vec<usize>,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_node_content(node: &ResourceNode, path: Vec<usize>, cx: &mut Context<Self>) -> Div {
         let has_groups = !node.asset_groups.is_empty();
         let has_children = !node.children.is_empty();
         div()
@@ -268,7 +264,7 @@ impl HomeView {
         group_idx: usize,
         path: Vec<usize>,
         cx: &mut Context<Self>,
-    ) -> AnyElement {
+    ) -> GroupBox {
         GroupBox::new()
             .title(group.title.clone())
             .child(
@@ -290,7 +286,6 @@ impl HomeView {
                         }))
                     })),
             )
-            .into_any_element()
     }
 
     fn toggle_variant(&mut self, node_path: &[usize], group_idx: usize, variant_idx: usize) {

@@ -5,8 +5,12 @@ use gpui::{AppContext, Application};
 use gpui_component::Root;
 use tracing::level_filters::LevelFilter;
 use tracing_error::ErrorLayer;
-use tracing_forest::ForestLayer;
-use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    EnvFilter, Registry,
+    fmt::{self, format::FmtSpan},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+};
 use unidown::{home::HomeView, window_options::window_options};
 
 #[global_allocator]
@@ -19,8 +23,8 @@ fn main() -> color_eyre::Result<()> {
                 .with_default_directive(LevelFilter::INFO.into())
                 .from_env_lossy(),
         )
-        .with(ForestLayer::default())
         .with(ErrorLayer::default())
+        .with(fmt::layer().pretty().with_span_events(FmtSpan::CLOSE))
         .init();
     color_eyre::install()?;
 

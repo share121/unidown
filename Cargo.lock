@@ -94,15 +94,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ansi_term"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d52a9bb7ec0cf484c551830a7ce27bd20d67eac647e1befb56b0be4ee39a55d2"
-dependencies = [
- "winapi",
-]
-
-[[package]]
 name = "anyhow"
 version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6532,21 +6523,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-forest"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f09cb459317a3811f76644334473239d696cd8efc606963ae7d1c308cead3b74"
-dependencies = [
- "ansi_term",
- "serde",
- "smallvec",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tracing-log"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6774,7 +6750,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-error",
- "tracing-forest",
  "tracing-subscriber",
 ]
 
