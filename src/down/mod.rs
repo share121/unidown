@@ -1,45 +1,57 @@
-use async_trait::async_trait;
-use gpui::SharedString;
-use std::{any::Any, fmt::Debug, path::Path, sync::Arc};
+use crate::bilibili::BiliDown;
+use gpui::{AnyView, Task, Window};
+use tracing::error;
 
-mod alldown;
 pub mod bilibili;
-pub use alldown::*;
 
-pub trait Context: Any + Send + Sync + Debug {}
-impl<T: Any + Send + Sync + Debug> Context for T {}
-
-#[derive(Clone, Debug)]
-pub struct ResourceNode {
-    pub title: SharedString,
-    pub asset_groups: Vec<AssetGroup>,
-    pub children: Vec<ResourceNode>,
-    /// 用来指导 asset_groups 的下载
-    pub context: Arc<dyn Context>,
+pub trait Parser: Send + Sync {
+    fn parse(
+        &self,
+        input: &str,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) -> Task<anyhow::Result<Option<AnyView>>>;
 }
 
-impl ResourceNode {
-    pub fn get_context<T: 'static>(&self) -> Option<&T> {
-        (self.context.as_ref() as &dyn Any).downcast_ref::<T>()
+pub struct AllDown {
+    downs: Vec<Box<dyn Parser>>,
+}
+
+impl AllDown {
+    pub fn new(downs: Vec<Box<dyn Parser>>) -> Self {
+        Self { downs }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct AssetGroup {
-    pub title: SharedString,
-    pub variants: Vec<AssetVariant>,
+impl Parser for AllDown {
+    fn parse(
+        &self,
+        input: &str,
+        window: &mut Window,
+        cx: &mut gpui::App,
+    ) -> Task<anyhow::Result<Option<AnyView>>> {
+        let mut tasks = Vec::with_capacity(self.downs.len());
+        for down in &self.downs {
+            tasks.push(down.parse(input, window, cx));
+        }
+        cx.spawn(async move |_| {
+            for task in tasks {
+                match task.await {
+                    Ok(Some(view)) => return Ok(Some(view)),
+                    Ok(None) => {}
+                    Err(e) => error!(err = ?e, "Error parsing input"),
+                }
+            }
+            Ok(None)
+        })
+    }
 }
 
-#[derive(Clone, Debug)]
-pub struct AssetVariant {
-    pub id: u32,
-    pub label: SharedString,
-    pub selected: bool,
-}
-
-#[async_trait]
-pub trait Down: Send + Sync {
-    fn name(&self) -> &'static str;
-    async fn parse(&self, input: &str) -> color_eyre::Result<Vec<ResourceNode>>;
-    async fn download(&self, nodes: &[ResourceNode], ouput: &Path) -> color_eyre::Result<()>;
+lazy_static::lazy_static! {
+    pub static ref ALL_DOWN: AllDown = {
+        let downs: Vec<Box<dyn Parser>> = vec![
+            Box::new(BiliDown::new().expect("无法初始化 bilibili 解析器")),
+        ];
+        AllDown::new(downs)
+    };
 }
