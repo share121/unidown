@@ -50,7 +50,7 @@ impl Parser for AllDown {
 lazy_static::lazy_static! {
     pub static ref ALL_DOWN: AllDown = {
         let downs: Vec<Box<dyn Parser>> = vec![
-            Box::new(BiliDown::new().expect("无法初始化 bilibili 解析器")),
+            Box::new(BiliDown::new()),
         ];
         AllDown::new(downs)
     };

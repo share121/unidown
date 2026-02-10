@@ -5,11 +5,11 @@ use crate::{
     format_size,
     sanitize::sanitize,
 };
-use anyhow::{Context, anyhow, bail};
+use anyhow::{Context as _, anyhow, bail};
 use fast_down::utils::gen_unique_path;
 use gpui::{
-    AnyView, App, AppContext, ParentElement, Render, SharedString, Styled, Task, Window, div,
-    prelude::FluentBuilder,
+    AnyView, App, AppContext, Context, IntoElement, ParentElement, Render, SharedString, Styled,
+    Task, Timer, Window, div, prelude::FluentBuilder,
 };
 use gpui_component::{StyledExt, h_flex, progress::Progress, v_flex};
 use lazy_static::lazy_static;
@@ -20,30 +20,83 @@ use reqwest::{
 };
 use std::{
     env,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
+    time::Duration,
 };
+use tokio::task::JoinHandle;
 use tracing::{Instrument, info_span};
 
-lazy_static! {
-    static ref DEFAULT_HEADERS: Arc<HeaderMap> = HeaderMap::from_iter([
+fn get_headers(referer: &str) -> HeaderMap {
+    HeaderMap::from_iter( [
+        (header::REFERER, referer.parse().unwrap()),
         (header::ORIGIN, "https://www.bilibili.com".parse().unwrap()),
-        (
-            header::REFERER,
-            "https://www.bilibili.com/".parse().unwrap()
-        ),
-        (
-            header::USER_AGENT,
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36".parse().unwrap()
-        ),
+        (header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36".parse().unwrap()),
     ])
-    .into();
 }
 
-pub struct BiliDown {
-    client: Client,
+fn build_client(url: &str) -> anyhow::Result<Client> {
+    let client = ClientBuilder::new()
+        .default_headers(get_headers(url))
+        .build()?;
+    Ok(client)
+}
+
+struct AbortOnDrop(JoinHandle<anyhow::Result<()>>);
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+#[derive(Default)]
+struct ProgressState {
+    current: AtomicU64,
+    total: AtomicU64,
+    speed: AtomicU64,
+}
+
+impl ProgressState {
+    fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    fn update(&self, info: ProgressInfo) {
+        self.speed.store(info.speed_bps, Ordering::Relaxed);
+        self.current.store(info.downloaded, Ordering::Relaxed);
+        self.total.store(info.total, Ordering::Relaxed);
+    }
+
+    fn display(&self) -> (String, f32) {
+        let curr = self.current.load(Ordering::Relaxed) as f64;
+        let total = self.total.load(Ordering::Relaxed) as f64;
+        let speed = self.speed.load(Ordering::Relaxed) as f64;
+        let pct = if total > 0.0 {
+            (curr / total * 100.0) as f32
+        } else {
+            0.0
+        };
+        let text = format!(
+            "{} / {} | {:.2}% | {}/s",
+            format_size(curr),
+            format_size(total),
+            pct,
+            format_size(speed)
+        );
+        (text, pct)
+    }
+}
+
+#[derive(Default)]
+pub struct BiliDown {}
+
+impl BiliDown {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
 impl Parser for BiliDown {
@@ -54,225 +107,175 @@ impl Parser for BiliDown {
         cx: &mut App,
     ) -> Task<anyhow::Result<Option<AnyView>>> {
         let bvid = extract_bvid(input).map(|s| s.to_string());
-        let client = self.client.clone();
+        let client = build_client(input);
         cx.spawn(async move |cx| {
-            let bvid = bvid.context("无法提取 bilibili 视频的 bvid")?;
-            let ouput_dir = dirs::desktop_dir()
+            let client = client.context("无法创建客户端")?;
+            let bvid = bvid.context("无效的 BV 号")?;
+            let output_dir = dirs::desktop_dir()
                 .or_else(dirs::download_dir)
                 .or_else(|| env::current_dir().ok())
-                .context("无法找到输出路径")?;
-            let client_clone = client.clone();
+                .context("找不到下载目录")?;
+            let client_cl = client.clone();
             let (title, (video_url, audio_url)) = TOKIO_RT
                 .spawn(async move {
-                    tokio::try_join!(
-                        get_title(&bvid, &client_clone),
-                        get_info(&bvid, &client_clone)
-                    )
+                    tokio::try_join!(get_title(&bvid, &client_cl), get_info(&bvid, &client_cl))
                 })
                 .await??;
-            let video_speed = Arc::new(AtomicU64::new(0));
-            let video_curr = Arc::new(AtomicU64::new(0));
-            let video_total = Arc::new(AtomicU64::new(0));
-            let video_speed_clone = video_speed.clone();
-            let video_curr_clone = video_curr.clone();
-            let video_total_clone = video_total.clone();
-            let video_path = ouput_dir.join(sanitize(&format!("{}.mp4", title)));
-            let video_client = client.clone();
-            let video_fut = async move {
-                let video_path = gen_unique_path(video_path).await?;
-                fd(
-                    video_url,
-                    &video_path,
-                    &video_client,
-                    DEFAULT_HEADERS.clone(),
-                    |info: ProgressInfo| {
-                        video_speed_clone.store(info.speed_bps, Ordering::Relaxed);
-                        video_curr_clone.store(info.downloaded, Ordering::Relaxed);
-                        video_total_clone.store(info.total, Ordering::Relaxed);
-                    },
-                )
-                .await?;
-                Ok::<_, anyhow::Error>(video_path)
-            };
-            let audio_speed = Arc::new(AtomicU64::new(0));
-            let audio_curr = Arc::new(AtomicU64::new(0));
-            let audio_total = Arc::new(AtomicU64::new(0));
-            let audio_speed_clone = audio_speed.clone();
-            let audio_curr_clone = audio_curr.clone();
-            let audio_total_clone = audio_total.clone();
-            let audio_path = ouput_dir.join(sanitize(&format!("{}.mp3", title)));
-            let audio_client = client.clone();
-            let audio_fut = async move {
-                let audio_path = gen_unique_path(audio_path).await?;
-                fd(
-                    audio_url,
-                    &audio_path,
-                    &audio_client,
-                    DEFAULT_HEADERS.clone(),
-                    |info: ProgressInfo| {
-                        audio_speed_clone.store(info.speed_bps, Ordering::Relaxed);
-                        audio_curr_clone.store(info.downloaded, Ordering::Relaxed);
-                        audio_total_clone.store(info.total, Ordering::Relaxed);
-                    },
-                )
-                .await?;
-                Ok::<_, anyhow::Error>(audio_path)
-            };
-            let merge_path = ouput_dir.join(sanitize(&format!("{}-合并.mp4", title)));
+            let video_state = ProgressState::new();
+            let audio_state = ProgressState::new();
             let frame = Arc::new(AtomicU64::new(0));
             let merge_speed = Arc::new(AtomicU64::new(0));
-            let frame_clone = frame.clone();
-            let merge_speed_clone = merge_speed.clone();
             let is_finished = Arc::new(AtomicBool::new(false));
-            let is_finished_clone = is_finished.clone();
-            let handle = cx.spawn(async move |_| {
-                TOKIO_RT
-                    .spawn(async move {
-                        let (video_path, audio_path) = tokio::try_join!(video_fut, audio_fut)?;
-                        let merge_path = gen_unique_path(merge_path).await?;
-                        let span = info_span!("合并音视频");
-                        ffmpeg(
-                            [
-                                "-i",
-                                &video_path.to_string_lossy(),
-                                "-i",
-                                &audio_path.to_string_lossy(),
-                                "-c",
-                                "copy",
-                                &merge_path.to_string_lossy(),
-                            ],
-                            |info| {
-                                frame_clone.store(info.frame, Ordering::Relaxed);
-                                merge_speed_clone
-                                    .store((info.speed * 1000.) as u64, Ordering::Relaxed);
-                            },
+            let task_handle = {
+                let is_finished = is_finished.clone();
+                let (video_state, audio_state, frame, merge_speed) = (
+                    video_state.clone(),
+                    audio_state.clone(),
+                    frame.clone(),
+                    merge_speed.clone(),
+                );
+                let (title, client, output_dir) =
+                    (title.clone(), client.clone(), output_dir.clone());
+                TOKIO_RT.spawn(async move {
+                    let _guard = scopeguard::guard((), |_| {
+                        is_finished.store(true, Ordering::Relaxed);
+                    });
+                    let (video_path, audio_path) = tokio::try_join!(
+                        download_segment(
+                            video_url,
+                            &title,
+                            "mp4",
+                            &output_dir,
+                            &client,
+                            &video_state
+                        ),
+                        download_segment(
+                            audio_url,
+                            &title,
+                            "mp3",
+                            &output_dir,
+                            &client,
+                            &audio_state
                         )
-                        .instrument(span)
-                        .await?;
-                        Ok::<_, anyhow::Error>(())
-                    })
-                    .await??;
-                is_finished_clone.store(true, Ordering::Relaxed);
-                Ok::<_, anyhow::Error>(())
-            });
-            let view = cx.new(|_| BiliView {
-                title,
-                audio_speed,
-                audio_curr,
-                audio_total,
-                video_speed,
-                video_curr,
-                video_total,
-                frame,
-                merge_speed,
-                handle,
-                is_finished,
+                    )?;
+                    let merge_path =
+                        gen_unique_path(output_dir.join(sanitize(&format!("{}-合并.mp4", title))))
+                            .await?;
+                    let span = info_span!("合并音视频");
+                    ffmpeg(
+                        [
+                            "-i",
+                            &video_path.to_string_lossy(),
+                            "-i",
+                            &audio_path.to_string_lossy(),
+                            "-c",
+                            "copy",
+                            "-y",
+                            &merge_path.to_string_lossy(),
+                        ],
+                        move |info| {
+                            frame.store(info.frame, Ordering::Relaxed);
+                            merge_speed.store((info.speed * 1000.) as u64, Ordering::Relaxed);
+                        },
+                    )
+                    .instrument(span)
+                    .await?;
+                    Ok(())
+                })
+            };
+            let view = cx.new(|cx| {
+                let finished_flag = is_finished.clone();
+                cx.spawn(async move |view, cx| {
+                    loop {
+                        if finished_flag.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        Timer::after(Duration::from_millis(100)).await;
+                        if view.update(cx, |_, cx| cx.notify()).is_err() {
+                            break;
+                        }
+                    }
+                })
+                .detach();
+                let guard = Arc::new(AbortOnDrop(task_handle));
+                BiliView {
+                    title,
+                    video_state,
+                    audio_state,
+                    frame,
+                    merge_speed,
+                    is_finished,
+                    _guard: guard,
+                }
             })?;
             Ok(Some(view.into()))
         })
     }
 }
 
-impl BiliDown {
-    pub fn new() -> anyhow::Result<Self> {
-        let client = ClientBuilder::new()
-            .default_headers(DEFAULT_HEADERS.as_ref().clone())
-            .build()?;
-        Ok(Self { client })
-    }
+async fn download_segment(
+    url: Url,
+    title: &str,
+    ext: &str,
+    dir: &Path,
+    client: &Client,
+    state: &ProgressState,
+) -> anyhow::Result<PathBuf> {
+    let path = gen_unique_path(dir.join(sanitize(&format!("{}.{}", title, ext)))).await?;
+    let headers = get_headers(url.as_str()).into();
+    fd(url, &path, client, headers, move |info| state.update(info)).await?;
+    Ok(path)
 }
 
 pub struct BiliView {
     title: SharedString,
-    audio_speed: Arc<AtomicU64>,
-    audio_curr: Arc<AtomicU64>,
-    audio_total: Arc<AtomicU64>,
-    video_speed: Arc<AtomicU64>,
-    video_curr: Arc<AtomicU64>,
-    video_total: Arc<AtomicU64>,
+    video_state: Arc<ProgressState>,
+    audio_state: Arc<ProgressState>,
     frame: Arc<AtomicU64>,
     merge_speed: Arc<AtomicU64>,
-    #[allow(unused)]
-    handle: Task<anyhow::Result<()>>,
     is_finished: Arc<AtomicBool>,
+    _guard: Arc<AbortOnDrop>,
 }
 
 impl Render for BiliView {
-    fn render(
-        &mut self,
-        _: &mut gpui::Window,
-        _: &mut gpui::Context<Self>,
-    ) -> impl gpui::IntoElement {
-        let video_curr = self.video_curr.load(Ordering::Relaxed);
-        let video_total = self.video_total.load(Ordering::Relaxed);
-        let video_speed = self.video_speed.load(Ordering::Relaxed);
-        let video_progress = video_curr as f32 / video_total as f32 * 100.;
-        let video_size_str = format!(
-            "{} / {} | {:.2}% | {}/s",
-            format_size(video_curr as f64),
-            format_size(video_total as f64),
-            video_progress,
-            format_size(video_speed as f64)
-        );
-
-        let audio_curr = self.audio_curr.load(Ordering::Relaxed);
-        let audio_total = self.audio_total.load(Ordering::Relaxed);
-        let audio_speed = self.audio_speed.load(Ordering::Relaxed);
-        let audio_progress = audio_curr as f32 / audio_total as f32 * 100.;
-        let audio_size_str = format!(
-            "{} / {} | {:.2}% | {}/s",
-            format_size(audio_curr as f64),
-            format_size(audio_total as f64),
-            audio_progress,
-            format_size(audio_speed as f64)
-        );
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let (video_text, video_pct) = self.video_state.display();
+        let (audio_text, audio_pct) = self.audio_state.display();
 
         let frame = self.frame.load(Ordering::Relaxed);
         let merge_speed = self.merge_speed.load(Ordering::Relaxed) as f64 / 1000.;
-        let merge_size_str = format!("frame: {} | speed: {:.2}x", frame, merge_speed);
-
-        let is_finished = self.is_finished.load(Ordering::Relaxed);
+        let merge_text = format!("frame: {} | speed: {:.2}x", frame, merge_speed);
+        let done = self.is_finished.load(Ordering::Relaxed);
 
         v_flex()
             .p_4()
             .gap_4()
             .child(div().child(self.title.clone()).text_2xl().font_bold())
-            .child(
-                v_flex()
-                    .gap_2()
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .child(div().child("下载视频").text_lg().font_bold())
-                            .child(video_size_str),
-                    )
-                    .child(Progress::new().value(video_progress)),
-            )
-            .child(
-                v_flex()
-                    .gap_2()
-                    .child(
-                        h_flex()
-                            .justify_between()
-                            .child(div().child("下载音频").text_lg().font_bold())
-                            .child(audio_size_str),
-                    )
-                    .child(Progress::new().value(audio_progress)),
-            )
+            .child(self.render_row("视频", video_text, video_pct))
+            .child(self.render_row("音频", audio_text, audio_pct))
             .child(
                 h_flex()
                     .justify_between()
-                    .child(div().child("合并音视频").text_lg().font_bold())
-                    .child(merge_size_str),
+                    .child(div().child("合并处理").text_lg().font_bold())
+                    .child(merge_text),
             )
-            .when(is_finished, |this| {
-                this.child(
-                    div()
-                        .child("全部下载完成，请检查桌面")
-                        .text_2xl()
-                        .font_bold(),
-                )
+            .when(done, |this| {
+                this.child(div().child("全部完成，请检查桌面").text_2xl().font_bold())
             })
+    }
+}
+
+impl BiliView {
+    fn render_row(&self, label: &str, text: String, pct: f32) -> impl IntoElement {
+        v_flex()
+            .gap_2()
+            .child(
+                h_flex()
+                    .justify_between()
+                    .child(div().child(label.to_string()).text_lg().font_bold())
+                    .child(text),
+            )
+            .child(Progress::new().value(pct))
     }
 }
 

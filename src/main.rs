@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+use anyhow::Context;
 use gpui::{AppContext, Application};
 use gpui_component::Root;
+use sevenz_rust2::decompress;
 use std::{io::Cursor, path::Path};
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber::{
@@ -53,10 +55,9 @@ fn main() -> anyhow::Result<()> {
 fn install_ffmpeg() -> anyhow::Result<()> {
     if !FFMPEG_PATH.exists() {
         info!("未检测到 ffmpeg，正在解压...");
-        const FFMPEG_BYTES: &[u8] = include_bytes!("../ffmpeg.zip");
+        const FFMPEG_BYTES: &[u8] = include_bytes!("../ffmpeg.7z");
         let reader = Cursor::new(FFMPEG_BYTES);
-        let mut archive = zip::ZipArchive::new(reader)?;
-        archive.extract(CURRENT_DIR.as_path())?;
+        decompress(reader, CURRENT_DIR.as_path()).context("解压 ffmpeg 失败")?;
         info!("解压完成");
     } else {
         info!("ffmpeg 已存在，跳过解压");
