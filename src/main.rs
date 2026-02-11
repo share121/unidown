@@ -5,6 +5,7 @@ use gpui_component::Root;
 use sevenz_rust2::decompress;
 use std::{io::Cursor, path::Path};
 use tracing::{info, level_filters::LevelFilter};
+use tracing_error::ErrorLayer;
 use tracing_subscriber::{
     EnvFilter, Registry,
     fmt::{self, format::FmtSpan},
@@ -35,6 +36,7 @@ fn main() -> anyhow::Result<()> {
                 .from_env_lossy(),
         )
         .with(fmt::layer().pretty().with_span_events(FmtSpan::CLOSE))
+        .with(ErrorLayer::default())
         .init();
     install_ffmpeg()?;
     let app = Application::new().with_assets(gpui_component_assets::Assets);

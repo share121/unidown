@@ -17,7 +17,8 @@ allow = [
   "BSD-2-Clause",
   "MPL-2.0",
   "NCSA",
-  "0BSD"
+  "0BSD",
+  "bzip2-1.0.6"
 ]
 confidence-threshold = 1.0
 

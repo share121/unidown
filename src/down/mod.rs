@@ -1,8 +1,9 @@
-use crate::bilibili::BiliDown;
+use crate::{bilibili::BiliDown, douyin::DouyinDown};
 use gpui::{AnyView, Task, Window};
 use tracing::error;
 
 pub mod bilibili;
+pub mod douyin;
 
 pub trait Parser: Send + Sync {
     fn parse(
@@ -51,6 +52,7 @@ lazy_static::lazy_static! {
     pub static ref ALL_DOWN: AllDown = {
         let downs: Vec<Box<dyn Parser>> = vec![
             Box::new(BiliDown::new()),
+            Box::new(DouyinDown::new()),
         ];
         AllDown::new(downs)
     };

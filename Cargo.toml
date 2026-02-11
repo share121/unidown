@@ -19,9 +19,11 @@ gpui-component-assets = "0.5.1"
 lazy_static = "1.5.0"
 mimalloc = "0.1.48"
 parking_lot = "0.12.5"
+percent-encoding = "2.3.2"
 regex = "1.12.3"
 reqwest = { version = "0.13.2", features = [
   "brotli",
+  "cookies",
   "deflate",
   "gzip",
   "json",
@@ -36,6 +38,7 @@ sevenz-rust2 = "0.20.1"
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["full"] }
 tracing = "0.1.44"
+tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 windows = { version = "0.62", features = [
   "Win32_Foundation",

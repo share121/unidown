@@ -180,6 +180,8 @@ impl Parser for BiliDown {
                     )
                     .instrument(span)
                     .await?;
+                    let _ = tokio::fs::remove_file(&audio_path).await;
+                    let _ = tokio::fs::remove_file(&video_path).await;
                     Ok(())
                 })
             };
