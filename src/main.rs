@@ -12,7 +12,7 @@ use tracing_subscriber::{
     layer::SubscriberExt,
     util::SubscriberInitExt,
 };
-use unidown::{CURRENT_DIR, FFMPEG_PATH, home::HomeView, window_options::window_options};
+use unidown::{FFMPEG_DIR, FFMPEG_PATH, home::HomeView, window_options::window_options};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -55,11 +55,13 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn install_ffmpeg() -> anyhow::Result<()> {
-    if !FFMPEG_PATH.exists() {
+    if !FFMPEG_PATH.try_exists().unwrap_or(false) {
         info!("未检测到 ffmpeg，正在解压...");
         const FFMPEG_BYTES: &[u8] = include_bytes!("../ffmpeg.7z");
         let reader = Cursor::new(FFMPEG_BYTES);
-        decompress(reader, CURRENT_DIR.as_path()).context("解压 ffmpeg 失败")?;
+        let ffmpeg_dir = FFMPEG_DIR.as_path();
+        let _ = std::fs::create_dir_all(ffmpeg_dir);
+        decompress(reader, FFMPEG_DIR.as_path()).context("解压 ffmpeg 失败")?;
         info!("解压完成");
     } else {
         info!("ffmpeg 已存在，跳过解压");

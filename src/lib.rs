@@ -21,12 +21,11 @@ lazy_static::lazy_static! {
             .expect("Failed to create Tokio runtime")
     };
     pub static ref JS_RT: JsRuntime = JsRuntime::new();
-    pub static ref CURRENT_DIR: PathBuf = {
-        let exe_path = std::env::current_exe().expect("无法获取当前可执行文件路径");
-        exe_path.parent().expect("无法找到可执行文件目录").to_path_buf()
+    pub static ref FFMPEG_DIR: PathBuf = {
+        dirs::home_dir().expect("Failed to get home directory").join(".unidown")
     };
     pub static ref FFMPEG_PATH: PathBuf = {
-        let target_dir = CURRENT_DIR.as_path();
+        let target_dir = FFMPEG_DIR.as_path();
         let ffmpeg_name = if cfg!(windows) {
             "ffmpeg.exe"
         } else {
