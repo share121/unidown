@@ -94,28 +94,28 @@ impl Parser for BiliDown {
                     });
                     let video_header = get_headers(video_url.as_str()).into();
                     let audio_header = get_headers(audio_url.as_str()).into();
-                    let (video_path, audio_path) = tokio::try_join!(
-                        download_segment(
-                            video_url,
-                            &title,
-                            "mp4",
-                            &output_dir,
-                            &client,
-                            &video_state,
-                            4,
-                            video_header
-                        ),
-                        download_segment(
-                            audio_url,
-                            &title,
-                            "mp3",
-                            &output_dir,
-                            &client,
-                            &audio_state,
-                            2,
-                            audio_header,
-                        )
-                    )?;
+                    let video_path = download_segment(
+                        video_url,
+                        &title,
+                        "mp4",
+                        &output_dir,
+                        &client,
+                        &video_state,
+                        4,
+                        video_header,
+                    )
+                    .await?;
+                    let audio_path = download_segment(
+                        audio_url,
+                        &title,
+                        "mp3",
+                        &output_dir,
+                        &client,
+                        &audio_state,
+                        4,
+                        audio_header,
+                    )
+                    .await?;
                     let merge_filename = sanitize(format!(
                         "{}-合并.mp4",
                         sanitize::truncate_to_bytes(&title, 230)
