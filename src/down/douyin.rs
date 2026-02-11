@@ -9,6 +9,7 @@ use gpui::{
     Task, Timer, Window, div, prelude::FluentBuilder,
 };
 use gpui_component::{StyledExt, h_flex, progress::Progress, v_flex};
+use regex::Regex;
 use reqwest::{
     Client,
     header::{self, HeaderMap},
@@ -49,7 +50,9 @@ impl Parser for DouyinDown {
         let client = Client::new();
         let client_cl = client.clone();
         let js_rt = JS_RT.clone();
-        let input = input.to_string();
+        let input = extract_modal_id(input)
+            .map(|s| format!("https://www.douyin.com?{s}"))
+            .unwrap_or_else(|| input.to_string());
         let fut = TOKIO_RT.spawn(async move { js_rt.parse_douyin(input, client_cl).await });
         cx.spawn(async move |cx| {
             let (title, video_url) = fut.await?.context("无法解析抖音视频链接")?;
@@ -144,4 +147,13 @@ impl DouyinView {
             )
             .child(Progress::new().value(pct))
     }
+}
+
+fn extract_modal_id(url: &str) -> Option<&str> {
+    lazy_static::lazy_static! {
+        static ref MODAL_ID_REGEX: Regex = Regex::new(r"\bmodal_id=\d+?\b").unwrap();
+    }
+    MODAL_ID_REGEX
+        .captures(url)
+        .and_then(|c| c.get(0).map(|m| m.as_str()))
 }
