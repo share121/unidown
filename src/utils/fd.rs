@@ -36,8 +36,15 @@ pub async fn fd(
     headers: Arc<HeaderMap>,
     on_progress: impl Fn(ProgressInfo) + Send + Sync,
 ) -> anyhow::Result<()> {
+    let mut progress = Vec::new();
+    let mut global_retry = 0;
     'retry: loop {
         info!("开始获取元数据");
+        if global_retry > 3 {
+            error!("重试次数超过限制，完全重下");
+            progress.clear();
+            global_retry = 0;
+        }
         let (info, resp) = loop {
             match client.prefetch(url.clone()).await {
                 Ok(t) => {
@@ -68,19 +75,20 @@ pub async fn fd(
         })?;
         let total = info.size;
         let pusher = MmapFilePusher::new(&output, total).await?;
+        let download_chunks: Vec<_> =
+            fast_down::invert(progress.iter(), total, 1024 * 1024).collect();
         let result = download_multi(
             puller,
             pusher,
             multi::DownloadOptions {
                 #[allow(clippy::single_range_in_vec_init)]
-                download_chunks: [0..total].iter(),
+                download_chunks: download_chunks.iter(),
                 retry_gap: Duration::from_millis(500),
                 concurrent: threads,
                 push_queue_cap: 1024,
-                min_chunk_size: 8 * 1024,
+                min_chunk_size: 1024 * 1024,
             },
         );
-        let mut progress = Vec::new();
         let mut smoothed_speed = 0.;
         let alpha = 0.3;
         let mut last_update = Instant::now();
@@ -94,10 +102,16 @@ pub async fn fd(
                     warn!("下载数据出错 {}: {:?}", id, e);
                     if let HttpError::MismatchedBody(_) = e {
                         retry_count += 1;
-                        if retry_count > threads * 2 {
+                        if retry_count > (threads * 2).max(8) {
                             threads = 1;
-                            error!(threads = threads, "下载数据出错过多，完全重试");
-                            tokio::time::sleep(Duration::from_secs(2)).await;
+                            global_retry += 1;
+                            error!(
+                                global_retry = global_retry,
+                                retry_count = retry_count,
+                                threads = threads,
+                                "下载数据出错过多，尝试断点续传"
+                            );
+                            tokio::time::sleep(Duration::from_secs(2 * global_retry)).await;
                             continue 'retry;
                         }
                     }

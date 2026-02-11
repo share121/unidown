@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Context as _;
 use gpui::{
     AnyView, App, AppContext, Context, IntoElement, ParentElement, Render, SharedString, Styled,
-    Task, Timer, Window, div, prelude::FluentBuilder,
+    Task, Timer, Window, div,
 };
 use gpui_component::{StyledExt, h_flex, progress::Progress, v_flex};
 use regex::Regex;
@@ -79,7 +79,7 @@ impl Parser for DouyinDown {
                         &output_dir,
                         &client,
                         &state,
-                        32,
+                        4,
                         headers,
                     )
                     .await?;
@@ -129,9 +129,16 @@ impl Render for DouyinView {
             .gap_4()
             .child(div().child(self.title.clone()).text_2xl().font_bold())
             .child(self.render_row("视频", text, pct))
-            .when(done, |this| {
-                this.child(div().child("全部完成，请检查桌面").text_2xl().font_bold())
-            })
+            .child(
+                div()
+                    .child(if done {
+                        "全部完成，请检查桌面"
+                    } else {
+                        "下载还未完成，请耐心等待，点解析按钮可以打断下载并重试"
+                    })
+                    .text_2xl()
+                    .font_bold(),
+            )
     }
 }
 

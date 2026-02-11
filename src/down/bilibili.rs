@@ -9,7 +9,7 @@ use anyhow::{Context as _, anyhow, bail};
 use fast_down::utils::gen_unique_path;
 use gpui::{
     AnyView, App, AppContext, Context, IntoElement, ParentElement, Render, SharedString, Styled,
-    Task, Timer, Window, div, prelude::FluentBuilder,
+    Task, Timer, Window, div,
 };
 use gpui_component::{StyledExt, h_flex, progress::Progress, v_flex};
 use lazy_static::lazy_static;
@@ -100,7 +100,7 @@ impl Parser for BiliDown {
                         &output_dir,
                         &client,
                         &video_state,
-                        32,
+                        16,
                         header.clone(),
                     )
                     .await?;
@@ -111,7 +111,7 @@ impl Parser for BiliDown {
                         &output_dir,
                         &client,
                         &audio_state,
-                        32,
+                        16,
                         header,
                     )
                     .await?;
@@ -208,9 +208,16 @@ impl Render for BiliView {
                     .child(div().child("合并处理").text_lg().font_bold())
                     .child(merge_text),
             )
-            .when(done, |this| {
-                this.child(div().child("全部完成，请检查桌面").text_2xl().font_bold())
-            })
+            .child(
+                div()
+                    .child(if done {
+                        "全部完成，请检查桌面"
+                    } else {
+                        "下载还未完成，请耐心等待，点解析按钮可以打断下载并重试"
+                    })
+                    .text_2xl()
+                    .font_bold(),
+            )
     }
 }
 
