@@ -102,7 +102,7 @@ impl Parser for BiliDown {
                             &output_dir,
                             &client,
                             &video_state,
-                            32,
+                            4,
                             video_header
                         ),
                         download_segment(
@@ -112,7 +112,7 @@ impl Parser for BiliDown {
                             &output_dir,
                             &client,
                             &audio_state,
-                            8,
+                            2,
                             audio_header,
                         )
                     )?;
