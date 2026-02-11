@@ -50,6 +50,7 @@ impl Parser for DouyinDown {
         let client = Client::new();
         let client_cl = client.clone();
         let js_rt = JS_RT.clone();
+        let headers = get_headers(input).into();
         let input = extract_modal_id(input)
             .map(|s| format!("https://www.douyin.com?{s}"))
             .unwrap_or_else(|| input.to_string());
@@ -71,7 +72,6 @@ impl Parser for DouyinDown {
                     let _guard = scopeguard::guard((), |_| {
                         is_finished.store(true, Ordering::Relaxed);
                     });
-                    let headers = get_headers(video_url.as_str()).into();
                     download_segment(
                         video_url,
                         &title,

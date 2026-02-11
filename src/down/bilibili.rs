@@ -59,6 +59,7 @@ impl Parser for BiliDown {
         _: &mut Window,
         cx: &mut App,
     ) -> Task<anyhow::Result<Option<AnyView>>> {
+        let header = Arc::new(get_headers(input));
         let bvid = extract_bvid(input).map(|s| s.to_string());
         let client = build_client(input);
         cx.spawn(async move |cx| {
@@ -92,8 +93,6 @@ impl Parser for BiliDown {
                     let _guard = scopeguard::guard((), |_| {
                         is_finished.store(true, Ordering::Relaxed);
                     });
-                    let video_header = get_headers(video_url.as_str()).into();
-                    let audio_header = get_headers(audio_url.as_str()).into();
                     let video_path = download_segment(
                         video_url,
                         &title,
@@ -102,7 +101,7 @@ impl Parser for BiliDown {
                         &client,
                         &video_state,
                         4,
-                        video_header,
+                        header.clone(),
                     )
                     .await?;
                     let audio_path = download_segment(
@@ -113,7 +112,7 @@ impl Parser for BiliDown {
                         &client,
                         &audio_state,
                         4,
-                        audio_header,
+                        header,
                     )
                     .await?;
                     let merge_filename = sanitize(format!(
