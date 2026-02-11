@@ -23,7 +23,9 @@ pub struct HomeView {
 
 impl HomeView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input_state = cx.new(|cx| InputState::new(window, cx).placeholder("输入 URL"));
+        let input_state = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("输入 URL，支持抖音、B 站 1080P 视频免登录下载")
+        });
         let _subscription = cx.subscribe_in(&input_state, window, {
             let input_state = input_state.clone();
             move |view, _, ev, window, cx| {
