@@ -39,7 +39,7 @@ pub fn sanitize(filename: impl AsRef<str>) -> String {
     format!("{}{}", final_base, ext)
 }
 
-fn truncate_to_bytes(s: &str, max_bytes: usize) -> &str {
+pub fn truncate_to_bytes(s: &str, max_bytes: usize) -> &str {
     if s.len() <= max_bytes {
         return s;
     }

@@ -3,7 +3,7 @@ use crate::{
     abort::AbortOnDrop,
     fd::{ProgressState, download_segment},
     ffmpeg::ffmpeg,
-    sanitize::sanitize,
+    sanitize::{self, sanitize},
 };
 use anyhow::{Context as _, anyhow, bail};
 use fast_down::utils::gen_unique_path;
@@ -102,6 +102,7 @@ impl Parser for BiliDown {
                             &output_dir,
                             &client,
                             &video_state,
+                            32,
                             video_header
                         ),
                         download_segment(
@@ -111,11 +112,16 @@ impl Parser for BiliDown {
                             &output_dir,
                             &client,
                             &audio_state,
-                            audio_header
+                            8,
+                            audio_header,
                         )
                     )?;
+                    let merge_filename = sanitize(format!(
+                        "{}-合并.mp4",
+                        sanitize::truncate_to_bytes(&title, 230)
+                    ));
                     let merge_path = gen_unique_path(soft_canonicalize::soft_canonicalize(
-                        output_dir.join(sanitize(format!("{}-合并.mp4", title))),
+                        output_dir.join(merge_filename),
                     )?)
                     .await?;
                     let span = info_span!("合并音视频");

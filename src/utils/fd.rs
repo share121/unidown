@@ -32,10 +32,10 @@ pub async fn fd(
     url: Url,
     output: &Path,
     client: &Client,
+    mut threads: usize,
     headers: Arc<HeaderMap>,
     on_progress: impl Fn(ProgressInfo) + Send + Sync,
 ) -> anyhow::Result<()> {
-    let mut threads = 8;
     'retry: loop {
         info!("开始获取元数据");
         let (info, resp) = loop {
@@ -153,12 +153,16 @@ pub async fn download_segment(
     dir: &Path,
     client: &Client,
     state: &ProgressState,
+    threads: usize,
     headers: Arc<HeaderMap>,
 ) -> anyhow::Result<PathBuf> {
     let path = soft_canonicalize::soft_canonicalize(
         dir.join(sanitize(format!("{}.{}.fdpart", title, ext))),
     )?;
-    fd(url, &path, client, headers, move |info| state.update(info)).await?;
+    fd(url, &path, client, threads, headers, move |info| {
+        state.update(info)
+    })
+    .await?;
     let output_path = gen_unique_path(path.with_extension("")).await?;
     fs::rename(&path, &output_path).await?;
     Ok(output_path)
