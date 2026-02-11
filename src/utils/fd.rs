@@ -40,7 +40,7 @@ pub async fn fd(
     let mut global_retry = 0;
     'retry: loop {
         info!("开始获取元数据");
-        if global_retry > 3 {
+        if global_retry >= 2 {
             error!("重试次数超过限制，完全重下");
             progress.clear();
             global_retry = 0;
