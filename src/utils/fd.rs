@@ -3,16 +3,22 @@ use fast_down::{
     file::MmapFilePusher,
     http::{HttpError, Prefetch},
     multi::{self, download_multi},
-    utils::{FastDownPuller, FastDownPullerOptions},
+    utils::{FastDownPuller, FastDownPullerOptions, gen_unique_path},
 };
 use parking_lot::Mutex;
 use reqwest::{Client, Url, header::HeaderMap};
 use std::{
-    path::Path,
-    sync::Arc,
+    path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
+use tokio::fs;
 use tracing::{error, info, warn};
+
+use crate::{format_size, sanitize::sanitize};
 
 #[derive(Debug, Clone, Default)]
 pub struct ProgressInfo {
@@ -137,5 +143,61 @@ pub async fn fd(
         };
         on_progress(progress_info);
         break Ok(());
+    }
+}
+
+pub async fn download_segment(
+    url: Url,
+    title: &str,
+    ext: &str,
+    dir: &Path,
+    client: &Client,
+    state: &ProgressState,
+    headers: Arc<HeaderMap>,
+) -> anyhow::Result<PathBuf> {
+    let path = soft_canonicalize::soft_canonicalize(
+        dir.join(sanitize(format!("{}.{}.fdpart", title, ext))),
+    )?;
+    fd(url, &path, client, headers, move |info| state.update(info)).await?;
+    let output_path = gen_unique_path(path.with_extension("")).await?;
+    fs::rename(&path, &output_path).await?;
+    Ok(output_path)
+}
+
+#[derive(Default)]
+pub struct ProgressState {
+    current: AtomicU64,
+    total: AtomicU64,
+    speed: AtomicU64,
+}
+
+impl ProgressState {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn update(&self, info: ProgressInfo) {
+        self.speed.store(info.speed_bps, Ordering::Relaxed);
+        self.current.store(info.downloaded, Ordering::Relaxed);
+        self.total.store(info.total, Ordering::Relaxed);
+    }
+
+    pub fn display(&self) -> (String, f32) {
+        let curr = self.current.load(Ordering::Relaxed) as f64;
+        let total = self.total.load(Ordering::Relaxed) as f64;
+        let speed = self.speed.load(Ordering::Relaxed) as f64;
+        let pct = if total > 0.0 {
+            (curr / total * 100.0) as f32
+        } else {
+            0.0
+        };
+        let text = format!(
+            "{} / {} | {:.2}% | {}/s",
+            format_size(curr),
+            format_size(total),
+            pct,
+            format_size(speed)
+        );
+        (text, pct)
     }
 }

@@ -1,0 +1,15 @@
+{
+  "name": "js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "esbuild index.js --bundle --format=iife --global-name=Douyin --minify --outfile=bundle.js",
+    "test": "node test.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3"
+  },
+  "dependencies": {
+    "crypto-js": "^4.2.0"
+  }
+}

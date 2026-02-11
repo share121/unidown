@@ -1,8 +1,8 @@
 use crate::{
     Parser, TOKIO_RT,
-    fd::{ProgressInfo, fd},
+    abort::AbortOnDrop,
+    fd::{ProgressState, download_segment},
     ffmpeg::ffmpeg,
-    format_size,
     sanitize::sanitize,
 };
 use anyhow::{Context as _, anyhow, bail};
@@ -20,14 +20,12 @@ use reqwest::{
 };
 use std::{
     env,
-    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
-use tokio::task::JoinHandle;
 use tracing::{Instrument, info_span};
 
 fn get_headers(referer: &str) -> HeaderMap {
@@ -43,51 +41,6 @@ fn build_client(url: &str) -> anyhow::Result<Client> {
         .default_headers(get_headers(url))
         .build()?;
     Ok(client)
-}
-
-struct AbortOnDrop(JoinHandle<anyhow::Result<()>>);
-impl Drop for AbortOnDrop {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
-}
-
-#[derive(Default)]
-struct ProgressState {
-    current: AtomicU64,
-    total: AtomicU64,
-    speed: AtomicU64,
-}
-
-impl ProgressState {
-    fn new() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
-
-    fn update(&self, info: ProgressInfo) {
-        self.speed.store(info.speed_bps, Ordering::Relaxed);
-        self.current.store(info.downloaded, Ordering::Relaxed);
-        self.total.store(info.total, Ordering::Relaxed);
-    }
-
-    fn display(&self) -> (String, f32) {
-        let curr = self.current.load(Ordering::Relaxed) as f64;
-        let total = self.total.load(Ordering::Relaxed) as f64;
-        let speed = self.speed.load(Ordering::Relaxed) as f64;
-        let pct = if total > 0.0 {
-            (curr / total * 100.0) as f32
-        } else {
-            0.0
-        };
-        let text = format!(
-            "{} / {} | {:.2}% | {}/s",
-            format_size(curr),
-            format_size(total),
-            pct,
-            format_size(speed)
-        );
-        (text, pct)
-    }
 }
 
 #[derive(Default)]
@@ -134,12 +87,13 @@ impl Parser for BiliDown {
                     frame.clone(),
                     merge_speed.clone(),
                 );
-                let (title, client, output_dir) =
-                    (title.clone(), client.clone(), output_dir.clone());
+                let (title, client) = (title.clone(), client.clone());
                 TOKIO_RT.spawn(async move {
                     let _guard = scopeguard::guard((), |_| {
                         is_finished.store(true, Ordering::Relaxed);
                     });
+                    let video_header = get_headers(video_url.as_str()).into();
+                    let audio_header = get_headers(audio_url.as_str()).into();
                     let (video_path, audio_path) = tokio::try_join!(
                         download_segment(
                             video_url,
@@ -147,7 +101,8 @@ impl Parser for BiliDown {
                             "mp4",
                             &output_dir,
                             &client,
-                            &video_state
+                            &video_state,
+                            video_header
                         ),
                         download_segment(
                             audio_url,
@@ -155,12 +110,14 @@ impl Parser for BiliDown {
                             "mp3",
                             &output_dir,
                             &client,
-                            &audio_state
+                            &audio_state,
+                            audio_header
                         )
                     )?;
-                    let merge_path =
-                        gen_unique_path(output_dir.join(sanitize(&format!("{}-合并.mp4", title))))
-                            .await?;
+                    let merge_path = gen_unique_path(soft_canonicalize::soft_canonicalize(
+                        output_dir.join(sanitize(format!("{}-合并.mp4", title))),
+                    )?)
+                    .await?;
                     let span = info_span!("合并音视频");
                     ffmpeg(
                         [
@@ -199,7 +156,6 @@ impl Parser for BiliDown {
                     }
                 })
                 .detach();
-                let guard = Arc::new(AbortOnDrop(task_handle));
                 BiliView {
                     title,
                     video_state,
@@ -207,26 +163,12 @@ impl Parser for BiliDown {
                     frame,
                     merge_speed,
                     is_finished,
-                    _guard: guard,
+                    _guard: AbortOnDrop(task_handle),
                 }
             })?;
             Ok(Some(view.into()))
         })
     }
-}
-
-async fn download_segment(
-    url: Url,
-    title: &str,
-    ext: &str,
-    dir: &Path,
-    client: &Client,
-    state: &ProgressState,
-) -> anyhow::Result<PathBuf> {
-    let path = gen_unique_path(dir.join(sanitize(&format!("{}.{}", title, ext)))).await?;
-    let headers = get_headers(url.as_str()).into();
-    fd(url, &path, client, headers, move |info| state.update(info)).await?;
-    Ok(path)
 }
 
 pub struct BiliView {
@@ -236,7 +178,7 @@ pub struct BiliView {
     frame: Arc<AtomicU64>,
     merge_speed: Arc<AtomicU64>,
     is_finished: Arc<AtomicBool>,
-    _guard: Arc<AbortOnDrop>,
+    _guard: AbortOnDrop<anyhow::Result<()>>,
 }
 
 impl Render for BiliView {

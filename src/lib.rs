@@ -11,6 +11,8 @@ pub use view::*;
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
 
+use crate::utils::js::JsRuntime;
+
 lazy_static::lazy_static! {
     pub static ref TOKIO_RT: Runtime = {
         tokio::runtime::Builder::new_multi_thread()
@@ -18,6 +20,7 @@ lazy_static::lazy_static! {
             .build()
             .expect("Failed to create Tokio runtime")
     };
+    pub static ref JS_RT: JsRuntime = JsRuntime::new();
     pub static ref CURRENT_DIR: PathBuf = {
         let exe_path = std::env::current_exe().expect("无法获取当前可执行文件路径");
         exe_path.parent().expect("无法找到可执行文件目录").to_path_buf()
