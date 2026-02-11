@@ -95,7 +95,7 @@ pub async fn fd(
                     if let HttpError::MismatchedBody(_) = e {
                         retry_count += 1;
                         if retry_count > threads * 2 {
-                            threads = (threads / 2).max(1);
+                            threads = 1;
                             error!(threads = threads, "下载数据出错过多，完全重试");
                             tokio::time::sleep(Duration::from_secs(2)).await;
                             continue 'retry;
