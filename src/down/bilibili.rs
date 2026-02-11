@@ -100,7 +100,7 @@ impl Parser for BiliDown {
                         &output_dir,
                         &client,
                         &video_state,
-                        4,
+                        1,
                         header.clone(),
                     )
                     .await?;
@@ -111,7 +111,7 @@ impl Parser for BiliDown {
                         &output_dir,
                         &client,
                         &audio_state,
-                        4,
+                        1,
                         header,
                     )
                     .await?;

@@ -79,7 +79,7 @@ impl Parser for DouyinDown {
                         &output_dir,
                         &client,
                         &state,
-                        2,
+                        1,
                         headers,
                     )
                     .await?;
