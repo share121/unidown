@@ -130,8 +130,12 @@ impl Parser for BiliDown {
                             &video_path.to_string_lossy(),
                             "-i",
                             &audio_path.to_string_lossy(),
-                            "-c",
-                            "copy",
+                            "-c:v",
+                            "h264_mf",
+                            "-threads",
+                            "0",
+                            "-c:a",
+                            "aac",
                             "-y",
                             &merge_path.to_string_lossy(),
                         ],
@@ -205,7 +209,12 @@ impl Render for BiliView {
             .child(
                 h_flex()
                     .justify_between()
-                    .child(div().child("合并处理").text_lg().font_bold())
+                    .child(
+                        div()
+                            .child("合并处理 (速度取决于视频大小和电脑性能)")
+                            .text_lg()
+                            .font_bold(),
+                    )
                     .child(merge_text),
             )
             .child(

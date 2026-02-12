@@ -2,8 +2,11 @@ use crate::{
     JS_RT, Parser, TOKIO_RT,
     abort::AbortOnDrop,
     fd::{ProgressState, download_segment},
+    ffmpeg::ffmpeg,
+    sanitize::{self, sanitize},
 };
 use anyhow::Context as _;
+use fast_down::utils::gen_unique_path;
 use gpui::{
     AnyView, App, AppContext, Context, IntoElement, ParentElement, Render, SharedString, Styled,
     Task, Timer, Window, div,
@@ -18,10 +21,11 @@ use std::{
     env,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
+use tracing::{Instrument, info_span};
 
 fn get_headers(referer: &str) -> HeaderMap {
     HeaderMap::from_iter( [
@@ -63,16 +67,20 @@ impl Parser for DouyinDown {
                 .or_else(|| env::current_dir().ok())
                 .context("找不到下载目录")?;
             let state = ProgressState::new();
+            let frame = Arc::new(AtomicU64::new(0));
+            let merge_speed = Arc::new(AtomicU64::new(0));
             let is_finished = Arc::new(AtomicBool::new(false));
             let task_handle = {
                 let is_finished = is_finished.clone();
                 let state = state.clone();
                 let title = title.clone();
+                let frame = frame.clone();
+                let merge_speed = merge_speed.clone();
                 TOKIO_RT.spawn(async move {
                     let _guard = scopeguard::guard((), |_| {
                         is_finished.store(true, Ordering::Relaxed);
                     });
-                    download_segment(
+                    let video_path = download_segment(
                         video_url,
                         &title,
                         "mp4",
@@ -83,6 +91,36 @@ impl Parser for DouyinDown {
                         headers,
                     )
                     .await?;
+                    let merge_filename = sanitize(format!(
+                        "{}-转码.mp4",
+                        sanitize::truncate_to_bytes(&title, 230)
+                    ));
+                    let merge_path = gen_unique_path(soft_canonicalize::soft_canonicalize(
+                        output_dir.join(merge_filename),
+                    )?)
+                    .await?;
+                    let span = info_span!("转码视频");
+                    ffmpeg(
+                        [
+                            "-i",
+                            &video_path.to_string_lossy(),
+                            "-c:v",
+                            "h264_mf",
+                            "-threads",
+                            "0",
+                            "-c:a",
+                            "aac",
+                            "-y",
+                            &merge_path.to_string_lossy(),
+                        ],
+                        move |info| {
+                            frame.store(info.frame, Ordering::Relaxed);
+                            merge_speed.store((info.speed * 1000.) as u64, Ordering::Relaxed);
+                        },
+                    )
+                    .instrument(span)
+                    .await?;
+                    let _ = tokio::fs::remove_file(&video_path).await;
                     Ok(())
                 })
             };
@@ -103,6 +141,8 @@ impl Parser for DouyinDown {
                 DouyinView {
                     title,
                     state,
+                    frame,
+                    merge_speed,
                     is_finished,
                     _guard: AbortOnDrop(task_handle),
                 }
@@ -115,6 +155,8 @@ impl Parser for DouyinDown {
 pub struct DouyinView {
     title: SharedString,
     state: Arc<ProgressState>,
+    frame: Arc<AtomicU64>,
+    merge_speed: Arc<AtomicU64>,
     is_finished: Arc<AtomicBool>,
     _guard: AbortOnDrop<anyhow::Result<()>>,
 }
@@ -122,6 +164,10 @@ pub struct DouyinView {
 impl Render for DouyinView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let (text, pct) = self.state.display();
+
+        let frame = self.frame.load(Ordering::Relaxed);
+        let merge_speed = self.merge_speed.load(Ordering::Relaxed) as f64 / 1000.;
+        let merge_text = format!("frame: {} | speed: {:.2}x", frame, merge_speed);
         let done = self.is_finished.load(Ordering::Relaxed);
 
         v_flex()
@@ -129,6 +175,17 @@ impl Render for DouyinView {
             .gap_4()
             .child(div().child(self.title.clone()).text_2xl().font_bold())
             .child(self.render_row("视频", text, pct))
+            .child(
+                h_flex()
+                    .justify_between()
+                    .child(
+                        div()
+                            .child("视频转码 (速度取决于视频大小和电脑性能)")
+                            .text_lg()
+                            .font_bold(),
+                    )
+                    .child(merge_text),
+            )
             .child(
                 div()
                     .child(if done {
